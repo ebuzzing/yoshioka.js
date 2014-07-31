@@ -603,7 +603,7 @@ Y.extend(I18nManager, Y.Base, {
         
         text = locales[key.replace(/~/, '.')];
         
-        if (!text)
+        if (!text && (typeof Y.config != "undefined") && (typeof Y.config.dev != "undefined") && Y.config.dev)
         {
             Y.log('undefined locale : '+key);
         }

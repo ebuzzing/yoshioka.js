@@ -2,13 +2,15 @@
 var fs = require('fs'),
     YUI = require('yui').YUI,
     vm = require('vm'),
-    
+    path = require('path'),
+
     BASEPATH = __dirname+'/../../..',
     YUIALL = 'yui-all.js',
-    
+
     readAppConfig = function(buildname)
     {
-        var config = fs.readFileSync(BASEPATH+'/build/'+buildname+'/config/config.js').toString();
+        var configfile = path.resolve(BASEPATH+'/build/'+buildname+'/config/config.js')
+        var config = fs.readFileSync(configfile).toString();
         vm.runInThisContext(config);
     },
     loadYUI = function(require)
@@ -25,17 +27,17 @@ var fs = require('fs'),
                 if (root === 'locales' ||
                     root === 'plugins' ||
                     root === 'views') return;
-            
+
                 paths.push(js.path);
             }
         );
-    
+
         return paths;
     },
     insertScriptTag = function(buildname)
     {
         var htmls = [];
-        
+
         fs.readdirSync(BASEPATH+'/build/').forEach(
             function(f)
             {
@@ -45,7 +47,7 @@ var fs = require('fs'),
                 }
             }
         );
-        
+
         htmls.forEach(
             function(f)
             {
@@ -53,9 +55,9 @@ var fs = require('fs'),
                     content = fs.readFileSync(filepath).toString(),
                     // Get basepath
                     basepath = content.match(/src="(.*?)\/config\/config.js/);
-                
+
                 basepath = basepath && basepath[1];
-                
+
                 fs.writeFileSync(
                     filepath,
                     content.replace(
@@ -71,16 +73,17 @@ exports.buildyui = function(config)
 {
     // Let's go !!
     var buildname = config && config.buildname,
-        modules = readAppConfig(buildname),
         appmodules = [],
         paths,
         allyui = '';
-    
+
+    readAppConfig(buildname)
+
     for (var m in YUI_config.groups[YUI_config.ys_app].modules)
     {
         appmodules.push(m);
     }
-    
+
     paths = loadYUI(appmodules);
 
     // Read and concat all requires files
@@ -89,7 +92,7 @@ exports.buildyui = function(config)
         {
             var path = BASEPATH+'/yui3/build/'+p,
                 file;
-        
+
             try
             {
                 file = fs.readFileSync(path).toString();
@@ -98,7 +101,7 @@ exports.buildyui = function(config)
             {
                 return;
             }
-        
+
             allyui+=file;
         }
     );
@@ -108,7 +111,7 @@ exports.buildyui = function(config)
         BASEPATH+'/build/'+buildname+'/'+YUIALL,
         allyui
     );
-    
+
     // Alter html seeds
     insertScriptTag(buildname);
 }

@@ -18,6 +18,7 @@ UnitTests = require('../unittests').UnitTests,
 Cli = require('./cli').Cli,
 FileParser = require('./fileparser').FileParser,
 Coverage = require('../coverage').Coverage,
+yb = require('../build/yui'),
 Fixtures,
 
 Server = function(config)
@@ -70,7 +71,7 @@ Server.prototype = {
      * @private
      */
     _port: null,
-    
+
     /**
      * Init Server with config from add_config.js and dev_config.js.
      * Start a HTTP server and wait for client request. Call _control method
@@ -81,11 +82,11 @@ Server.prototype = {
     init: function(config)
     {
         this._config = config || {};
-        
+
         this._config.app = getconfig.getConfig({
             dev: true
         });
-        
+
         /**
          * Available options
          * --build : build app
@@ -93,42 +94,35 @@ Server.prototype = {
          * --buildname : specify a custom build name. Default is current timestamp
          * --debug : Debug mode : will add some tools for debugging
          */
-        
+
         if (this._config.build)
         {
-            // Build the app !!
-            var Builder = require('../build').Builder,
-                builder = new Builder({
-                    path: this._config.build,
-                    buildname: this._config.buildname,
-                    debug: this._config.debug
-                });
-            
-            if (this._config.buildyui)
-            {
-                builder.on(
-                    'parseEnd',
-                    function(rep)
-                    {
-                        var yb = require('../build/yui');
 
-                        yb.buildyui({
-                            buildname: rep.buildname
-                        });
-                    }
-                );
+            // Build the app !!
+            var Builder = require('../build').Builder
+            var builder = new Builder({
+                path: this._config.build,
+                buildname: this._config.buildname,
+                debug: this._config.debug
+            })
+
+            if (this._config.buildyui) {
+                builder.on('configEnd', function() {
+                    yb.buildyui({
+                        buildname: builder._buildname
+                    });
+                });
             }
-            
+
             if (!this._config.dontcompress)
             {
-                builder.on(
-                    'parseEnd',
+                builder.once('configEnd',
                     function()
                     {
                         // Compress
                         var Compressor = require('../build/compressor').Compressor,
                             compressor = new Compressor({
-                                path: APP_PATH+this._buildpath
+                                path: APP_PATH+builder._buildpath
                             });
                         console.log("Compressing…");
                         compressor.compress(function()
@@ -138,17 +132,19 @@ Server.prototype = {
                     }
                 );
             }
+
             console.log("Building…");
             builder.build();
+
             return;
         }
-        
+
         this._cli = new Cli({
             dev: true
         });
-        
+
         this._port = this._config.app.port || 1636;
-        
+
         if (this._config.app.yoshioka &&
             this._config.app.yoshioka.https)
         {
@@ -181,7 +177,7 @@ Server.prototype = {
                 }.bind(this)
             );
         }
-        
+
         this._http.listen(this._port);
     },
     /**
@@ -200,14 +196,14 @@ Server.prototype = {
             config = getconfig.getConfig({
                 dev: true
             });
-        
+
         url = url.replace(/\?.*$/, '');
-        
+
         if (url.match(/^\/$/))
         {
             url+='index.html';
         }
-        
+
         /**
          * If url is __unittests, then, display unit tests
          */
@@ -240,7 +236,7 @@ Server.prototype = {
             });
             return;
         }
-        
+
         /**
          * If url starts with /__coverage, start the code coverage process
          */
@@ -280,7 +276,7 @@ Server.prototype = {
             }
             return;
         }
-        
+
         if (url.match(/^\/logerror\?/))
         {
             try
@@ -320,7 +316,7 @@ Server.prototype = {
                     }
                 }
             );
-            
+
             if (fixtures_path)
             {
                 /**
@@ -330,7 +326,7 @@ Server.prototype = {
                 return;
             }
         }
-        
+
         /**
          * In all other case, construct a new FileParser object
          */
@@ -353,5 +349,5 @@ Server.prototype = {
 };
 
 exports.Server = Server;
-    
+
 })();

@@ -1,239 +1,122 @@
-/**
- * Make the YUI_config file from all the application files and config
- * @module tools/make
- */
-(function(){
+var fs = require('fs')
+var util = require('util')
+var basename = require('path').basename
+var getconfig = require('./getconfig')
+var Fetcher = require('../fetcher').Fetcher
 
-var
-
-APP_PATH = __dirname.replace(/yoshioka\.js.*$/, ''),
-
-fs = require('fs'),
-events = require('events'),
-
-getconfig = require('./getconfig'),
-
-Fetcher = require('../fetcher').Fetcher,
+var APP_PATH = __dirname.replace(/yoshioka\.js.*$/, '')
 
 /**
  * Make the YUI_config file from all the application files and config
  * @class Maker
  */
-Maker = function(config)
-{
-    this.init.apply(this, arguments);
-};
+function Maker(config) {
+  config = config || {}
+  Fetcher.call(this, config)
 
-Maker.prototype = new Fetcher();
-Maker.superclass = Fetcher.prototype;
-Maker.prototype.dirs = null;
-Maker.prototype.files = null;
-Maker.prototype.basepath = null;
-Maker.prototype._filecounts = null;
-Maker.prototype._modules = null;
-Maker.prototype._dev = null;
-Maker.prototype.init = function(config)
-{
-    Maker.superclass.init.apply(this, arguments);
+  this.basepath = config.basepath || '/'
+  this._buildpath = config.buildpath || APP_PATH
+  this._modules = {}
+  this._dev = config.dev
+  this._tests = config.tests
 
-    config || (config = {});
+  this._appConfig = getconfig.getConfig({
+    dev: this._dev,
+    tests: this._tests,
+    buildname: config.buildname || ''
+  })
 
-    this.basepath = config.basepath || '/';
-    this._modules = {};
-    this._dev = config.dev;
-    this._tests = config.tests;
+  if (!Array.isArray(this._appConfig.exclude)) {
+    this._appConfig.exclude = this._appConfig.exclude != null ? [this._appConfig.exclude] : []
+  }
+}
 
-    this._appConfig = getconfig.getConfig({
-        dev: this._dev,
-        tests: this._tests,
-        buildname: config.buildname || ''
-    });
-};
+util.inherits(Maker, Fetcher)
+
 /**
  * Parse a file
  */
-Maker.prototype._parseFile = function(path)
-{
-    var excluded = false;
-    
-    /**
-     * Check if file is not excluded
-     */
-    if (this._appConfig.exclude)
-    {
-        if (typeof this._appConfig.exclude === 'string')
-        {
-            this._appConfig.exclude = [this._appConfig.exclude];
-        }
-        
-        this._appConfig.exclude.forEach(
-            function(e)
-            {
-                var regexp = new RegExp(e.replace('*', '[^/]+'));
-                
-                if (path.match(regexp))
-                {
-                    excluded = true;
-                }
-            }.bind(this)
-        );
-    }
-    
-    if (excluded)
-    {
-        this._filecount--;
-        this._checkFileCount();
-        return;
-    }
-    
-    if (path.match(/\.js$/) &&
-            !path.match(/test\.js$/))
-    {
-        /**
-         * Javascript file
-         */
-        this._parseJSFile(path);
-    }
-    else if (path.match(/\.css$/))
-    {
-        /**
-         * CSS file
-         */
-        this._parseCSSFile(path);
-    }
-    else if (path.match(/\.html$/))
-    {
-        /**
-         * CSS file
-         */
-        this._parseHTMLFile(path);
-    }
-    else
-    {
-        this._parseStaticFile(path);
-    }
-};
-Maker.prototype._parseJSFile = function(path)
-{
-    /**
-     * Read the file content to get the requires
-     */
-    fs.readFile(
-        APP_PATH+path,
-        function(err, data)
-        {
-            if (err)
-            {
-                throw err;
-            }
-            var script = data.toString(),
-                /**
-                 * get module name from
-                 * YUI().add call
-                 */
-                module = (module = script.match(
-                        /\@module ([a-zA-Z0-9\/\-\_]+)/
-                    )) && module[1],
-                /**
-                 * Get the requires array
-                 */
-                requires = script.replace(/\n|\r/g, '')
-                    .match(/\/\*.*?\*\//);
+Maker.prototype._parseFile = function(path) {
+  var excluded = (this._appConfig.exclude || []).some(function(e) {
+    return path.match(RegExp(e.replace('*', '[^/]+')))
+  })
 
-            if (!module)
-            {
-                this._filecount--;
-                this._checkFileCount();
-                return;
-            }
+  if (excluded) {
+    this._parseComplete()
+    return
+  }
 
-            if (requires &&
-                (requires = requires[0].match(
-                    /\@requires ([a-zA-Z0-9\/\-\_\,\.\s\*]+)\s\*(\/|\s@)/
-                )))
-            {
-                requires = requires[1]
-                    .replace(/\s\*/g, '')
-                    .replace(/,$/, '')
-                    .replace(/\s/g, '')
-                    .replace(/\*/g, '')
-                    .split(/,/);
-            }
+  if (path.match(/\.js$/) && !path.match(/test\.js$/)) {
+    this._parseJSFile(path)
+  } else if (path.match(/\.css$/)) {
+    this._parseCSSFile(path)
+  } else if (path.match(/\.html$/)) {
+    this._parseHTMLFile(path)
+  } else {
+    this._parseStaticFile(path)
+  }
+}
 
-            /**
-             * Generate config object for
-             * this module
-             */
-            this._modules[module] = {};
-            this._modules[module].path = path;
-            if (requires)
-            {
-                this._modules[module].requires = requires
-            }
+Maker.prototype._parseJSFile = function(path) {
+  var script = fs.readFileSync(APP_PATH+path).toString()
 
-            /**
-             * Decrement file count and check
-             */
-            this._filecount--;
-            this._checkFileCount();
+  // Parse JS comments
+  var module = script.match(/\@module ([a-zA-Z0-9\/\-\_]+)/)
+  if (module) {
+    module = module[1]
+    this._modules[module] = {path: path}
 
-        }.bind(this)
-    );
-};
+    var requires = script.replace(/\n|\r/g, '').match(/\/\*.*?\*\//);
+    if (requires && (requires = requires[0].match(/\@requires ([a-zA-Z0-9\/\-\_\,\.\s\*]+)\s\*(\/|\s@)/))) {
+      this._modules[module].requires = requires[1]
+        .replace(/\s\*/g, '')
+        .replace(/,$/, '')
+        .replace(/\s/g, '')
+        .replace(/\*/g, '')
+        .split(/,/)
+    }
+  }
+
+  this._parseComplete()
+}
+
 Maker.prototype._parseCSSFile = function(path)
 {
-    var file = (file = path.split(/\//)) &&
-        (file = file[file.length - 1].split(/\./)) &&
-        file.pop() &&
-        file.join('.'),
+  var module = path.match(/([^\/]+)\/assets\//)
+  if (module) {
+    module = module[1]
+  } else {
+    throw 'CSS file unknown path: ' + path
+  }
 
-        module = (module = path.match(/([^\/]+)\/assets\//)) && module[1],
+  var fullpath = this._appConfig.ys_app +
+    (path.match(/^plugins\//) ? '/plugins/' : '/views/') + module + '/assets/' +
+    basename(path, '.css')
 
-        isplugin = path.match(/^plugins\//);
+  this._modules[fullpath] = {}
+  this._modules[fullpath].path = path
+  this._modules[fullpath].type = 'css'
 
-    if (!module)
-    {
-        throw 'CSS file unknown path : ' + path;
-    }
+  this._parseComplete()
+}
 
-    module = this._appConfig.ys_app +
-        (isplugin ? '/plugins/' : '/views/')+module+'/assets/'+file;
+Maker.prototype._parseStaticFile = function() {
+  this._parseComplete()
+}
 
-    /**
-     * Generate config object for
-     * this module
-     */
-    this._modules[module] = {};
-    this._modules[module].path = path;
-    this._modules[module].type = 'css';
+Maker.prototype._parseHTMLFile = function() {
+  this._parseComplete()
+}
 
-
-    /**
-     * Decrement file count and check
-     */
-    this._filecount--;
-    this._checkFileCount();
-};
-Maker.prototype._parseStaticFile = function()
-{
-    this._filecount--;
-    this._checkFileCount();
-};
-Maker.prototype._parseHTMLFile = function()
-{
-    this._filecount--;
-    this._checkFileCount();
-};
 /**
  * Check the file count. Fire a `end` event if equal to 0.
  */
-Maker.prototype._checkFileCount = function()
-{
-    if (this._filecount === 0)
-    {
-        this.emit('parseEnd');
-    }
-};
+Maker.prototype._checkFileCount = function() {
+  if (this._filecount === 0) {
+    this.emit('parseEnd', this._appConfig)
+  }
+}
+
 // Write config file
 Maker.prototype.writeConfig = function(config)
 {
@@ -241,10 +124,6 @@ Maker.prototype.writeConfig = function(config)
      * Get the default config file
      */
     var coreConfig, YUI_config, filename;
-
-    config || (config = {});
-
-    config.path || (config.path = APP_PATH);
 
     filename = (true === config.tests) ? 'tconfig.js' : 'config.js'
 
@@ -272,21 +151,15 @@ Maker.prototype.writeConfig = function(config)
     /**
      * App group config
      */
-    YUI_config.groups[YUI_config.ys_app] ||
-        (YUI_config.groups[YUI_config.ys_app] = {});
+    YUI_config.groups[YUI_config.ys_app] = YUI_config.groups[YUI_config.ys_app] || {};
     YUI_config.groups[YUI_config.ys_app].modules = this._modules;
     YUI_config.groups[YUI_config.ys_app].base = this.basepath;
 
-    fs.writeFile(
-        config.path+'config/'+filename,
-        'YUI_config=' + JSON.stringify(YUI_config) + ';',
-        function(err)
-        {
-            this.emit('writeEnd');
-        }.bind(this)
+    fs.writeFileSync(
+        (config.path || '')+'config/'+filename,
+        'YUI_config=' + JSON.stringify(YUI_config) + ';'
     );
+    this.emit('writeEnd');
 };
 
-exports.Maker = Maker;
-
-})();
+exports.Maker = Maker

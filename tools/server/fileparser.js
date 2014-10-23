@@ -72,7 +72,7 @@ FileParser.prototype = {
      * @private
      */
     callback: null,
-    
+
     /**
      * Init fileparser
      * @method init
@@ -85,9 +85,9 @@ FileParser.prototype = {
             filename = path[path.length -1],
             filenameparts = filename.split(/\./),
             ext = filenameparts[filenameparts.length - 1];
-        
+
         path.pop();
-        
+
         this.path = path;
         this.filename = filename;
         this.ext = ext;
@@ -102,7 +102,7 @@ FileParser.prototype = {
     getResponse: function(callback)
     {
         this.callback = callback;
-        
+
         this.parseFile();
     },
     /**
@@ -142,23 +142,23 @@ FileParser.prototype = {
     compileHTML: function()
     {
         this.contenttype = 'text/html';
-        
+
         fs.readFile(
             APP_PATH+this._getFilePath(),
             function(err, data)
             {
                 var c;
-                
+
                 if (err)
                 {
                     return this._callbackError(err);
                 }
-                
+
                 c = new compiler.HTMLCompiler({
                     file: this._getFilePath(),
                     filecontent: data.toString()
                 });
-                
+
                 c.parse(
                     function(content)
                     {
@@ -180,7 +180,7 @@ FileParser.prototype = {
         var filepath = this._getFilePath();
 
         this.contenttype = 'text/javascript';
-        
+
         if ('/config/config.js' === filepath)
         {
             return this.makeConfig();
@@ -247,14 +247,14 @@ FileParser.prototype = {
                 function(err, data)
                 {
                     var c;
-                
+
                     if (err)
                     {
                         return this._callbackError(err);
                     }
-                
+
                     this.filecontent = data.toString();
-                    
+
                     /**
                      * Insert templates into class view
                      */
@@ -262,13 +262,13 @@ FileParser.prototype = {
                         file: this._getFilePath(),
                         filecontent: this.filecontent
                     });
-                    
+
                     c.parse(function(content)
                     {
                         var c;
-                        
+
                         this.filecontent = content;
-                        
+
                         /**
                          * compile class view into yui module
                          */
@@ -309,11 +309,11 @@ FileParser.prototype = {
     compileCSS: function()
     {
         this.contenttype = 'text/css';
-        
+
         c = new compiler.CSSCompiler({
             file: this._getFilePath()
         });
-        
+
         c.parse(
             function(content)
             {
@@ -341,7 +341,7 @@ FileParser.prototype = {
                 this.contenttype = 'image/'+type;
                 break;
         }
-        
+
         fs.readFile(
             APP_PATH+this._getFilePath(),
             function(err, data)
@@ -363,14 +363,15 @@ FileParser.prototype = {
      */
     makeConfig: function(config)
     {
-        var appconfig = getconfig.getConfig(config),
-            maker = new Maker({
-                dirs: ['locales', 'views'].concat(appconfig && appconfig.plugins),
-                files: ['config/errors.js'],
-                basepath: '/',
-                dev: true,
-                tests: config && config.tests
-            });
+        var appconfig = getconfig.getConfig(config)
+        var maker = new Maker({
+              dirs: ['locales', 'views'].concat(appconfig && appconfig.plugins),
+              files: ['config/errors.js'],
+              basepath: '/',
+              buildname: appconfig.buildname,
+              dev: true,
+              tests: config && config.tests
+          })
 
         maker.on(
             'writeEnd',
@@ -391,6 +392,7 @@ FileParser.prototype = {
                 );
             }.bind(this)
         );
+
         maker.on(
             'parseEnd',
             function(config)
@@ -410,7 +412,7 @@ FileParser.prototype = {
     makeRoutes: function()
     {
         var c = new compiler.RoutesCompiler();
-        
+
         try
         {
             c.parse(
@@ -454,12 +456,12 @@ FileParser.prototype = {
             function(err, data)
             {
                 var isValid = false;
-                
+
                 if (err)
                 {
                     return this._callback404();
                 }
-                
+
                 try
                 {
                     data = JSON.parse(data.toString());
@@ -481,7 +483,7 @@ FileParser.prototype = {
                                 if (path instanceof RegExp) {
                                     return path;
                                 }
-                                
+
                                 path = path.replace(
                                     /([:*])([\w-]+)/g,
                                     function (match, operator, key)
@@ -490,7 +492,7 @@ FileParser.prototype = {
                                         return operator === '*' ? '(.*?)' : '([^\/]*)';
                                     }
                                 );
-                                
+
                                 return new RegExp('^' + path + '$');
                             })(p.path);
 
@@ -500,7 +502,7 @@ FileParser.prototype = {
                         }
                     }.bind(this)
                 );
-                
+
                 this.init({
                     url: DEFAULT_INDEX
                 });

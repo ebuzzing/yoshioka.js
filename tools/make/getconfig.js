@@ -19,9 +19,9 @@ fs = require('fs');
 exports.getConfig = function(config)
 {
     var app_config = null, dev_config = null;
-    
+
     config || (config = {});
-    
+
     /**
      * Get app config
      */
@@ -39,21 +39,21 @@ exports.getConfig = function(config)
             )
             .replace(
                 /\{\$buildname\}/g,
-                config.buildname
+                (config.buildname || '')
             )
             .replace( // Remove comments
                 /\/\*.*?\*\//,
                 ''
-            );
+            )
     }
     catch (e)
     {
         console.log("Your config/app_config.js does not exist.");
         app_config = {};
     }
-    
+
     app_config || (app_config = '{}');
-    
+
     try
     {
         app_config = JSON.parse(app_config);
@@ -71,7 +71,7 @@ exports.getConfig = function(config)
         try
         {
             dev_config = fs.readFileSync(dev_config_path).toString();
-            
+
             dev_config = dev_config
                 .replace( // Remove comments
                     /\/\*.*?\*\//g,
@@ -81,7 +81,7 @@ exports.getConfig = function(config)
                     /^|\s\/\/.*?\n/g,
                     ''
                 );
-            
+
             dev_config || (dev_config = '{}');
             dev_config = JSON.parse(dev_config);
             dev_config || (dev_config = {});
@@ -113,7 +113,7 @@ exports.getConfig = function(config)
                     /\/\*.*?\*\//,
                     ''
                 );
-            
+
             tests_config || (tests_config = '{}');
             tests_config = JSON.parse(tests_config);
             tests_config || (tests_config = {});
@@ -129,9 +129,10 @@ exports.getConfig = function(config)
         }
         catch (e)
         {
-            
+
         }
     }
+
     return app_config;
 };
 
